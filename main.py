@@ -201,7 +201,11 @@ def main():
             chart = caps[:chart_size]
             for k in range(min(places, len(chart))):
                 level, idx = chart[k]
-                size_hits[k][bin_of(level, edges)] += 1.0
+                # Bin a jittered copy of the place's cap: EXTRA_SIZE_SD of extra log10
+                # spread stands in for the placement error the model never captures, so
+                # the size histogram is not a spike at the simulated level.  The ranking
+                # and the place frequencies above keep using the unperturbed level.
+                size_hits[k][bin_of(level + EXTRA_SIZE_SD * normal(rng), edges)] += 1.0
                 if idx >= 0:
                     place_hits[idx][k] += 1.0
                 else:
@@ -247,10 +251,16 @@ def main():
         total = sum(size_hits[k])
         if total <= 0:
             continue
-        probs = [c / total for c in size_hits[k]]
+        probs = [round(c / total, 9) for c in size_hits[k]]
+        # Rounding to nine decimals can push a place's bins a hair past one; trim the
+        # excess off the largest bin so every place's size mass stays within budget.
+        excess = sum(probs) - 1.0
+        if excess > 0.0:
+            b_max = max(range(bins), key=lambda b: probs[b])
+            probs[b_max] = round(probs[b_max] - excess, 9)
         for b, p in enumerate(probs):
             if p > 0.0:
-                sizes.append({"place": k + 1, "bin": b, "p": round(p, 9)})
+                sizes.append({"place": k + 1, "bin": b, "p": p})
 
     write_forecast({"probabilities": probabilities, "top5": top5, "sizes": sizes}, task)
 
