@@ -130,16 +130,18 @@ def coin_states(marks, last_ts, floor_level):
     return states
 
 
-def unknown_level(rng, cohort_hours):
+def unknown_level(rng, cohort_hours, top_level):
     """A log10 cap drawn for a coin the history never named.
 
     Most such coins sit on the launch floor; a tenth are runners; two in a
     hundred break out, and the breakout level rises with the age of the day's
-    cohort (the day's biggest coin keeps growing, then plateaus).
+    cohort (the day's biggest coin keeps growing, then plateaus) and with how
+    high the day's leader already stands: a day whose cut leader is large is
+    a day whose answer-read leader is larger still.
     """
     u = rng.random()
     if u < 0.02:
-        centre = 4.45 + 0.055 * min(cohort_hours, 26.0)
+        centre = 4.45 + 0.055 * min(cohort_hours, 26.0) + 0.25 * max(0.0, top_level - 3.0)
         return centre + 0.55 * normal(rng)
     if u < 0.14:
         centre = 2.55 + 0.020 * min(cohort_hours, 26.0)
@@ -168,8 +170,6 @@ def main():
 
     states = coin_states(marks, last_ts, floor_level)
     # Only coins that could still reach a 100-coin chart are worth simulating.
-    horizon = max(0.5, max((r - last_ts) / 3600.0 for r in reads))
-    reach = FLOOR + max(0.0, (floor_level - FLOOR)) + 2.2 * SIGMA * math.sqrt(horizon)
     states = [s for s in states if s["level"] >= floor_level - 2.5]
     if len(states) > 1400:
         states.sort(key=lambda s: -s["level"])
@@ -191,14 +191,12 @@ def main():
         spread = SIGMA * math.sqrt(h)
         base = [s["level"] for s in states]
         means = [FLOOR + (lv - FLOOR) * decay for lv in base]
-        additions = [None] * UNKNOWN
-        scale = [1.0] * UNKNOWN
         for scenario in range(SCENARIOS):
             caps = []
             for i in range(n):
                 caps.append((means[i] + spread * normal(rng), i))
             for j in range(UNKNOWN):
-                caps.append((unknown_level(rng, cohort_hours), -1 - j))
+                caps.append((unknown_level(rng, cohort_hours, top_level), -1 - j))
             caps.sort(key=lambda pair: (-pair[0], pair[1]))
             chart = caps[:chart_size]
             for k in range(min(places, len(chart))):
